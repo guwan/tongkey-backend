@@ -1,0 +1,59 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: tongkey-server
+  threads:
+    virtual:
+      enabled: true            # 虚拟线程：支撑同步/推送的高并发低开销
+  datasource:
+    url: ${TONGKEY_DB_URL:jdbc:postgresql://localhost:5432/tongkey}
+    username: ${TONGKEY_DB_USER:postgres}
+    password: ${TONGKEY_DB_PASSWORD:postgres}
+    hikari:
+      maximum-pool-size: 20
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 50
+
+tongkey:
+  # 敏感字段（第三方数据库密码、推送密钥、Client Secret）加密密钥，生产必须通过环境变量覆盖
+  crypto:
+    key: ${TONGKEY_CRYPTO_KEY:TongKey-Dev-AES-Key-2026-08-28!}
+  # 管理控制台内置账号（可对接企业 SSO，见规格文档 12.1）
+  admin:
+    username: ${TONGKEY_ADMIN_USER:admin}
+    password: ${TONGKEY_ADMIN_PASSWORD:Admin@123}
+    token-ttl-minutes: 480
+  sync:
+    default-batch-size: 500
+    query-timeout-seconds: 300
+  push:
+    connect-timeout-seconds: 10
+    read-timeout-seconds: 30
+  openapi:
+    signature-max-skew-seconds: 300   # 签名时间戳允许的最大偏移，防重放
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+logging:
+  level:
+    com.tongkey: INFO
