@@ -6,12 +6,12 @@ TongKey 开放式授权中心后端服务。用户 / 角色 / 权限数据中心
 
 | 组件 | 技术 |
 |---|---|
-| 语言 | Java 24 |
+| 语言 | Java 24（Gradle toolchain 自动下载） |
 | 框架 | Spring Boot 4.1.1 / Spring Data JPA / Spring Security |
-| 数据库 | PostgreSQL 17（Hibernate 自动建表） |
+| 数据库 | PostgreSQL 17（开发环境 Hibernate 自动建表） |
 | API 文档 | springdoc-openapi 3.1.0 / Swagger UI |
 | 并发模型 | Spring 虚拟线程 |
-| 构建工具 | Maven |
+| 构建工具 | Gradle 8.14（Kotlin DSL，自带 Wrapper） |
 | 第三方 JDBC | MySQL / MariaDB / Oracle / SQL Server |
 
 ## 核心功能
@@ -25,24 +25,68 @@ TongKey 开放式授权中心后端服务。用户 / 角色 / 权限数据中心
 ## 目录结构
 
 ```
-src/main/java/com/tongkey/
-├── TongKeyApplication.java          # Spring Boot 启动类
-├── console/                          # 管理控制台控制器（Auth / User / Role / Permission / Dashboard / Audit）
-├── domain/                           # 领域层（Entity / Repository / Service）
-├── sync/                             # 同步引擎（多数据源 JDBC 读取 + 定时调度）
-├── push/                             # 推送引擎（Webhook 目标管理 + 事件触发推送）
-├── openapi/                          # 开放 API（Client 管理 + API 鉴权过滤器 + 限流）
-├── security/                         # Spring Security 配置 + 双过滤器
-├── common/                           # 通用工具（统一响应 / 异常 / 加密 / 分页 / TraceId）
-└── datasource/                       # 第三方数据源连接管理
+tongkey-backend/
+├── src/main/java/com/tongkey/
+│   ├── TongKeyApplication.java          # Spring Boot 启动类
+│   ├── console/                          # 管理控制台控制器
+│   ├── domain/                           # 领域层（Entity / Repository / Service）
+│   ├── datasource/                       # 第三方数据源连接管理
+│   ├── sync/                             # 同步引擎
+│   ├── push/                             # 推送引擎
+│   ├── openapi/                          # 开放 API（Client 管理 + 鉴权 + 限流）
+│   ├── security/                         # Spring Security + 双过滤器
+│   └── common/                           # 通用工具（响应 / 异常 / 加密 / TraceId）
+├── src/main/resources/
+│   ├── application.yml                   # 通用基础配置（不包含敏感值）
+│   ├── application-dev.yml               # 开发环境默认值（已提交）
+│   ├── application-prod.yml              # 生产环境配置（已提交，敏感值通过环境变量）
+│   └── application-local.yml             # 本地私有覆盖（gitignore，每个开发者自己放）
+├── build.gradle.kts                      # Gradle Kotlin DSL 构建文件
+├── settings.gradle.kts                   # Gradle 设置 + 仓库
+├── gradlew / gradlew.bat                 # Gradle Wrapper 启动脚本
+├── gradle/wrapper/gradle-wrapper.jar    # Wrapper bootstrap jar
+└── gradle/wrapper/gradle-wrapper.properties
+```
+
+## 多环境配置
+
+项目使用 Spring Profiles 管理多环境配置，分层叠加生效：
+
+```
+application.yml（通用基础）
+  + application-dev.yml（开发环境，默认激活）
+  + application-local.yml（本地私有覆盖，不提交）
+```
+
+| 文件 | 提交到 git？ | 用途 |
+|---|---|---|
+| `application.yml` | ✅ | 各环境共享的通用配置（框架、JPA、虚拟线程、Swagger 等） |
+| `application-dev.yml` | ✅ | 开发环境合理默认值：localhost PostgreSQL、自动建表、DEBUG 日志 |
+| `application-prod.yml` | ✅ | 生产安全配置：生产数据库必填、ddl-auto=validate、INFO 日志 |
+| `application-local.yml` | ❌ **gitignore** | 每个开发者本地私有覆盖，如自定义 DB、端口、密码 |
+
+### 切换环境
+
+```bash
+# 开发（默认，dev + local 叠加）
+./gradlew bootRun
+
+# 仅 dev
+SPRING_PROFILES_ACTIVE=dev ./gradlew bootRun
+
+# 生产（敏感字段必须通过环境变量注入）
+SPRING_PROFILES_ACTIVE=prod ./gradlew bootRun
+
+# dev 基础 + local 覆盖（推荐本地开发方式）
+SPRING_PROFILES_ACTIVE=dev,local ./gradlew bootRun
 ```
 
 ## 快速开始
 
 ### 环境要求
 
-- JDK 24（pom 已锁定 `<java.version>24</java.version>`）
-- PostgreSQL 17+
+- **JDK 24** — Gradle toolchain 会自动下载所需 JDK，也可手动设置 `JAVA_HOME`
+- **PostgreSQL 17+**
 
 ### 1. 创建数据库
 
@@ -50,29 +94,49 @@ src/main/java/com/tongkey/
 CREATE DATABASE tongkey;
 ```
 
-### 2. 配置环境变量（可选，覆盖默认值）
+### 2. 可选：创建本地私有配置
 
-| 变量 | 默认值 | 说明 |
-|---|---|---|
-| `TONGKEY_DB_URL` | `jdbc:postgresql://localhost:5432/tongkey` | 数据库连接 |
-| `TONGKEY_DB_USER` | `postgres` | 数据库用户 |
-| `TONGKEY_DB_PASSWORD` | `postgres` | 数据库密码 |
-| `TONGKEY_CRYPTO_KEY` | `TongKey-Dev-AES-Key-2026-08-28!` | 敏感字段加密密钥（**生产必须覆盖**） |
-| `TONGKEY_ADMIN_USER` | `admin` | 控制台管理员用户名 |
-| `TONGKEY_ADMIN_PASSWORD` | `Admin@123` | 控制台管理员密码（**生产必须覆盖**） |
+在 `src/main/resources/` 下创建 `application-local.yml`（此文件被 gitignore，可放心写入敏感值）：
 
-### 3. 构建与运行
+```yaml
+# 示例：改 DB 端口或连接远程开发库
+spring:
+  datasource:
+    url: jdbc:postgresql://192.168.1.100:5432/tongkey_dev
+
+# 示例：改端口避免冲突
+server:
+  port: 8081
+
+# 示例：自定义 admin 密码
+tongkey:
+  admin:
+    password: my-local-admin-pass
+```
+
+### 3. 构建与运行（Gradle Wrapper）
 
 ```bash
-# 开发运行
-$env:JAVA_HOME = 'C:\Program Files\Java\jdk-24'  # Windows PowerShell
-mvn spring-boot:run
+# Windows PowerShell
+.\gradlew.bat bootRun                     # 开发运行（默认 dev + local 叠加）
+.\gradlew.bat compileJava                # 仅编译
+.\gradlew.bat bootJar                    # 打包可执行 jar
+.\gradlew.bat test                       # 运行测试
 
-# 打包
-mvn clean package -DskipTests
+# macOS / Linux
+./gradlew bootRun
+./gradlew bootJar
+```
 
-# 运行打包后的 jar
-java -jar target/tongkey-server.jar
+Gradle Wrapper 会自动下载 Gradle 8.14（无需全局安装）。首次运行 Gradle toolchain 会自动下载 JDK 24。
+
+#### 通过代理下载（国内网络）
+
+如果通过代理上网，需要设置 `GRADLE_OPTS` 让 Gradle daemon 走代理：
+
+```powershell
+$env:GRADLE_OPTS = "-Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=7890 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=7890"
+.\gradlew.bat bootRun
 ```
 
 ### 4. 验证
@@ -84,6 +148,32 @@ java -jar target/tongkey-server.jar
 | OpenAPI 文档 | `GET http://localhost:8080/v3/api-docs` |
 | 管理控制台登录 | `POST http://localhost:8080/console/auth/login` |
 | 开放 API | `http://localhost:8080/api/v1/**`（需 X-API-Key） |
+
+### 5. 环境变量（覆盖配置文件）
+
+以下关键值通过环境变量注入，优先级高于配置文件：
+
+| 变量 | 说明 | 生产是否必须 |
+|---|---|---|
+| `SPRING_PROFILES_ACTIVE` | 激活的 profile，如 `prod` | ✅ |
+| `TONGKEY_DB_URL` | 数据库连接 URL | ✅（prod 必填） |
+| `TONGKEY_DB_USER` | 数据库用户名 | ✅（prod 必填） |
+| `TONGKEY_DB_PASSWORD` | 数据库密码 | ✅（prod 必填） |
+| `TONGKEY_CRYPTO_KEY` | 敏感字段 AES 加密密钥 | ✅（prod 必填） |
+| `TONGKEY_ADMIN_PASSWORD` | 控制台管理员密码 | ✅（prod 必填） |
+
+## 常用 Gradle 命令
+
+| 命令 | 说明 |
+|---|---|
+| `./gradlew bootRun` | 开发运行 |
+| `./gradlew compileJava` | 仅编译源码 |
+| `./gradlew bootJar` | 打包可执行 jar 到 `build/libs/tongkey-server.jar` |
+| `./gradlew bootWar` | 打包 WAR（需额外配置） |
+| `./gradlew clean` | 清理 `build/` |
+| `./gradlew build` | clean + compile + jar |
+| `./gradlew test` | 运行测试 |
+| `./gradlew dependencies` | 查看依赖树 |
 
 ## 关键约定
 

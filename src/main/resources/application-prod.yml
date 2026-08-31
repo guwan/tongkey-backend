@@ -1,0 +1,34 @@
+# ========================================
+# prod — 生产环境配置（提交到 git，但无硬编码敏感值）
+# 所有敏感字段必须通过环境变量注入
+# ========================================
+
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  datasource:
+    # 生产数据库连接必须通过环境变量，禁止硬编码
+    url: ${TONGKEY_DB_URL}
+    username: ${TONGKEY_DB_USER}
+    password: ${TONGKEY_DB_PASSWORD}
+    hikari:
+      maximum-pool-size: ${TONGKEY_DB_POOL_SIZE:50}
+  jpa:
+    hibernate:
+      ddl-auto: validate        # 生产只校验表结构，不自动修改
+
+tongkey:
+  crypto:
+    key: ${TONGKEY_CRYPTO_KEY}       # 必填：敏感字段 AES 加密密钥
+  admin:
+    username: ${TONGKEY_ADMIN_USER:admin}
+    password: ${TONGKEY_ADMIN_PASSWORD}  # 必填：生产密码必须覆盖默认值
+    token-ttl-minutes: 240
+
+# 生产安全日志级别
+logging:
+  level:
+    com.tongkey: INFO
+    org.springframework.web: WARN
+    org.springframework.security: WARN

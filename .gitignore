@@ -1,13 +1,18 @@
-# Maven / Java
+# Gradle
+build/
+.gradle/
+**/build/
+
+# Maven
 target/
+
+# Java 编译产物
 *.class
-*.jar
+/build/**/*.jar
+/target/**/*.jar
 *.war
 *.ear
 *.log
-.mvn/
-mvnw
-mvnw.cmd
 
 # IDE
 .idea/
@@ -20,12 +25,12 @@ mvnw.cmd
 .classpath
 .factorypath
 
-# 本地配置（含敏感信息）
+# 本地配置（含敏感信息，不提交）
 .env
 .env.local
 .env.*.local
 application-local.yml
-application-dev.yml
+# 注：application-dev.yml 和 application-prod.yml 提交到 git，application-local.yml 忽略
 
 # 系统文件
 .DS_Store
