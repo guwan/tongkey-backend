@@ -94,25 +94,25 @@ SPRING_PROFILES_ACTIVE=dev,local ./gradlew bootRun
 CREATE DATABASE tongkey;
 ```
 
-### 2. 可选：创建本地私有配置
+### 2. 本地私有配置
 
-在 `src/main/resources/` 下创建 `application-local.yml`（此文件被 gitignore，可放心写入敏感值）：
+`src/main/resources/application-local.yml`（已被 `.gitignore` 忽略）已预置了你真实的本地数据库连接：
 
 ```yaml
-# 示例：改 DB 端口或连接远程开发库
 spring:
   datasource:
-    url: jdbc:postgresql://192.168.1.100:5432/tongkey_dev
-
-# 示例：改端口避免冲突
-server:
-  port: 8081
-
-# 示例：自定义 admin 密码
-tongkey:
-  admin:
-    password: my-local-admin-pass
+    url: jdbc:postgresql://192.168.10.49:5432/tongkey
+    username: andy
+    password: a1111a
+    hikari:
+      pool-name: tongkeyLocalHikari
+      maximum-pool-size: 5
+      # ...其他 HikariCP 参数
 ```
+
+如需自定义，直接编辑这个文件即可。项目会按 `dev + local` 叠加生效。
+
+> 💡 其他开发者 clone 下来后，需要自己创建 `application-local.yml`（或直接用 dev 默认的 localhost:5432）。
 
 ### 3. 构建与运行（Gradle Wrapper）
 
@@ -174,6 +174,88 @@ $env:GRADLE_OPTS = "-Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=7890 -Dhttps.pro
 | `./gradlew build` | clean + compile + jar |
 | `./gradlew test` | 运行测试 |
 | `./gradlew dependencies` | 查看依赖树 |
+
+## 部署
+
+服务器部署使用 `doc/deploy.sh`（Bash 脚本，Linux），支持交互菜单和命令行两种模式。
+
+### 初始化部署配置
+
+```bash
+# 交互菜单 → 选择 backend → 填写项目信息
+./doc/deploy.sh init
+```
+
+初始化时会询问：
+
+| 字段 | 默认值 | 说明 |
+|---|---|---|
+| Git 仓库 | `github.com/guwan/<项目名>` | 可输入完整 URL 或项目名 |
+| Spring 环境 | `dev,local` | 本地开发机可用；生产填 `prod` |
+| **外部配置文件** | 空（可选） | 关键！指向服务器上手动放置的 `application-secret.yml` |
+| JVM 内存 | 256m / 1024m | 生产服务器可按需调大 |
+
+### 外部配置文件机制（重要）
+
+开源项目**不能把生产密码、密钥提交到 git**。生产部署推荐两种方式配合使用：
+
+**方式 A：外部配置文件（推荐）**
+
+在服务器部署目录（如 `/app/tongkey-backend/`）手动创建 `application-secret.yml`：
+
+```yaml
+# /app/tongkey-backend/application-secret.yml
+spring:
+  datasource:
+    url: jdbc:postgresql://your-prod-db:5432/tongkey
+    username: tongkey_app
+    password: your-real-db-password
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+tongkey:
+  crypto:
+    key: your-32-char-random-key
+  admin:
+    password: your-strong-admin-password
+```
+
+在 deploy.sh 初始化时，将"外部配置文件路径"填为 `application-secret.yml`（或绝对路径）。启动命令会自动追加 `--spring.config.additional-location=file:...`，该文件会覆盖 git 中 `application-prod.yml` 的敏感字段。
+
+**方式 B：.env 环境变量文件**
+
+也可以在部署目录放 `.env` 文件（参考 [doc/.env.example](./doc/.env.example)）：
+
+```bash
+cp doc/.env.example /app/tongkey-backend/.env
+vim /app/tongkey-backend/.env
+```
+
+deploy.sh 启动时会自动 `source APP_HOME/.env`，注入以下环境变量：
+
+```bash
+SPRING_PROFILES_ACTIVE=prod
+TONGKEY_DB_URL=jdbc:postgresql://your-prod-db:5432/tongkey
+TONGKEY_DB_USER=tongkey_app
+TONGKEY_DB_PASSWORD=your-real-db-password
+TONGKEY_CRYPTO_KEY=your-32-char-random-key
+TONGKEY_ADMIN_PASSWORD=your-strong-admin-password
+```
+
+> ⚠️ `.env` 和 `application-secret.yml` 都**不应被 git 跟踪**——`.gitignore` 已包含 `.env`，外部配置文件路径由运维自行管理。
+
+### 快捷命令
+
+```bash
+# 部署（git pull → Gradle 构建 → 重启）
+./doc/deploy.sh tongkey-backend deploy
+
+# 仅启动 / 停止 / 状态
+./doc/deploy.sh tongkey-backend start
+./doc/deploy.sh tongkey-backend stop
+./doc/deploy.sh tongkey-backend status
+```
 
 ## 关键约定
 

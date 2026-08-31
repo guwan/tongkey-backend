@@ -11,8 +11,8 @@
 
 # ─── 全局配置 ───────────────────────────────────────────────
 DEPLOY_CONFIG_DIR="${HOME}/.deploy/configs"
-GITEE_BASE="https://gitee.com/wu6789"
-DEFAULT_BRANCH="master"
+GIT_BASE="https://github.com/guwan"
+DEFAULT_BRANCH="main"
 DEFAULT_BACKEND_CODE_ROOT="/data/codes/backend"
 DEFAULT_FRONTEND_CODE_ROOT="/data/codes/frontend"
 DEFAULT_APP_ROOT="/app"
@@ -96,7 +96,7 @@ complete_git_url() {
     if [[ "$input" == http* ]] || [[ "$input" == git@* ]]; then
         echo "$input"
     else
-        echo "${GITEE_BASE}/${input}.git"
+        echo "${GIT_BASE}/${input}.git"
     fi
 }
 
@@ -202,6 +202,14 @@ LOG_PATH="${LOG_PATH}"
 LOG_FILE="${LOG_FILE}"
 APP_JAVA_HOME="${APP_JAVA_HOME}"
 SPRING_PROFILE="${SPRING_PROFILE}"
+# 外部配置文件（服务器上手动放置的 application-*.yml，不进 git）
+# Spring Boot 会在内部 application-*.yml 加载后，额外加载此文件并合并覆盖
+# 例: /app/tongkey-backend/application-secret.yml （含真实 DB 密码、加密密钥等）
+APP_CONFIG_FILE="${APP_CONFIG_FILE}"
+# JVM 内存参数
+JVM_XMS="${JVM_XMS}"
+JVM_XMX="${JVM_XMX}"
+JVM_EXTRA_OPTS="${JVM_EXTRA_OPTS}"
 EOF
     else
         cat >> "$conf" << EOF
@@ -272,7 +280,12 @@ cmd_init() {
         read_input LOG_PATH "日志目录" "$DEFAULT_LOG_ROOT"
         LOG_FILE="${LOG_PATH}/${APP_PURE_NAME}.log"
 
-        read_input SPRING_PROFILE "Spring 运行环境" "prod"
+        read_input SPRING_PROFILE "Spring 运行环境" "dev,local"
+
+        read_input APP_CONFIG_FILE "外部配置文件路径(可选，留空跳过)" ""
+        read_input JVM_XMS "JVM 初始堆内存" "256m"
+        read_input JVM_XMX "JVM 最大堆内存" "1024m"
+        read_input JVM_EXTRA_OPTS "JVM 额外参数(可选)" "-XX:+UseG1GC -XX:+HeapDumpOnOutOfMemoryError"
 
         echo ""
         print_step "扫描系统 JDK..."
@@ -354,6 +367,8 @@ cmd_init() {
         echo -e "  日志文件  : ${YELLOW}${LOG_FILE}${PLAIN}"
         echo -e "  JAVA_HOME : ${YELLOW}${APP_JAVA_HOME}${PLAIN}"
         echo -e "  Spring环境: ${YELLOW}${SPRING_PROFILE}${PLAIN}"
+        [ -n "${APP_CONFIG_FILE}" ] && echo -e "  外部配置  : ${YELLOW}${APP_CONFIG_FILE}${PLAIN}"
+        echo -e "  JVM内存   : ${YELLOW}-Xms${JVM_XMS} -Xmx${JVM_XMX}${PLAIN}"
     else
         echo -e "  Node路径  : ${YELLOW}${NODE_HOME:-系统默认}${PLAIN}"
         echo -e "  包管理器  : ${YELLOW}${PKG_MANAGER}${PLAIN}"
@@ -479,11 +494,56 @@ start_app() {
         print_warn "${APP_PURE_NAME}.jar 已在运行，PID: ${pid}"
         return
     fi
+
     cd "${APP_HOME}" || exit 1
+
+    # ── 1. 自动 source 部署目录下的 .env（如果存在）────────────────
+    if [ -f ".env" ]; then
+        print_step "加载环境变量文件: ${APP_HOME}/.env"
+        # shellcheck disable=SC1091
+        set -a
+        . ".env"
+        set +a
+    fi
+
+    # ── 2. 构建 Java 命令 ──────────────────────────────────────────
     local java_bin="${APP_JAVA_HOME}/bin/java"
     [ ! -x "$java_bin" ] && java_bin="java"
-    print_step "nohup ${java_bin} -Dspring.profiles.active=${SPRING_PROFILE} -jar ${APP_PURE_NAME}.jar >${LOG_FILE} 2>&1 &"
-    nohup "${java_bin}" -Dspring.profiles.active="${SPRING_PROFILE}" -jar "${APP_PURE_NAME}.jar" > "${LOG_FILE}" 2>&1 &
+
+    # JVM 内存参数
+    local jvm_memory=""
+    [ -n "${JVM_XMS}" ] && jvm_memory="-Xms${JVM_XMS}"
+    [ -n "${JVM_XMX}" ] && jvm_memory="${jvm_memory} -Xmx${JVM_XMX}"
+
+    # Spring profiles 支持多环境叠加（例: dev,local / prod,secret）
+    local spring_profile_arg="-Dspring.profiles.active=${SPRING_PROFILE:-dev}"
+
+    # 外部配置文件（放在 APP_HOME 下，不进 git）
+    local config_extra_arg=""
+    if [ -n "${APP_CONFIG_FILE}" ]; then
+        # 允许 APP_CONFIG_FILE 用相对路径（相对于 APP_HOME）或绝对路径
+        local abs_config="${APP_CONFIG_FILE}"
+        if [[ "$abs_config" != /* ]]; then
+            abs_config="${APP_HOME}/${abs_config}"
+        fi
+        if [ -f "${abs_config}" ]; then
+            config_extra_arg="--spring.config.additional-location=file:${abs_config}"
+            print_step "外部配置文件: ${abs_config}"
+        else
+            print_warn "外部配置文件不存在，跳过: ${abs_config}"
+        fi
+    fi
+
+    # 完整命令
+    local start_cmd="${java_bin} ${jvm_memory} ${JVM_EXTRA_OPTS} ${spring_profile_arg}"
+    start_cmd="${start_cmd} ${config_extra_arg}"
+    start_cmd="${start_cmd} -jar ${APP_PURE_NAME}.jar"
+
+    print_step "启动命令:"
+    print_step "  ${start_cmd} > ${LOG_FILE} 2>&1 &"
+
+    nohup ${start_cmd} > "${LOG_FILE}" 2>&1 &
+
     print_info "等待日志输出..."
     sleep 1
     tail -20f "${LOG_FILE}" | sed '/seconds (process running for/Q'
