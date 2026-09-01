@@ -3,14 +3,14 @@
 # 各环境共享，不包含敏感/环境特定值
 # ========================================
 
-# 默认激活 dev 环境，可通过环境变量覆盖
-# 例：SPRING_PROFILES_ACTIVE=prod,local  (dev 作为基础 + local 叠加覆盖)
-# 例：SPRING_PROFILES_ACTIVE=dev,local  (dev + local)
+# 默认激活 dev + local（本地开发常用叠加）
+# 生产部署通过环境变量 SPRING_PROFILES_ACTIVE=prod 覆盖
+# 注意：占位符 ${VAR:a,b} 里逗号会被截断，所以默认值直接硬写
 spring:
   application:
     name: tongkey-server
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:dev}
+    active: "dev,local"
   threads:
     virtual:
       enabled: true            # 虚拟线程：支撑同步/推送的高并发低开销
