@@ -11,8 +11,6 @@
 
 # ─── 全局配置 ───────────────────────────────────────────────
 DEPLOY_CONFIG_DIR="${HOME}/.deploy/configs"
-GITHUB_BASE="https://github.com"
-GITEE_BASE="https://gitee.com"
 DEFAULT_BACKEND_CODE_ROOT="/data/codes/backend"
 DEFAULT_FRONTEND_CODE_ROOT="/data/codes/frontend"
 DEFAULT_APP_ROOT="/app"
@@ -102,27 +100,16 @@ extract_app_name() {
     echo "${input##*/}"
 }
 
-# 补全 git 地址：短名 → 完整 URL
-# 完整 URL（http/https/git@）直接返回；短名则让用户选 Gitee 还是 GitHub
+# 补全 git 地址：URL 末尾加 .git 并去尾部斜杠
 complete_git_url() {
     local input="$1"
     input="${input%/}"
-    if [[ "$input" == http* ]] || [[ "$input" == git@* ]]; then
+    # 已有 .git 结尾原样返回
+    if [[ "$input" == *.git ]]; then
         echo "$input"
-        return
+    else
+        echo "${input}.git"
     fi
-    # 短名 → 让用户选平台
-    local host_choice
-    echo -e "${CYAN}  Git 平台:${PLAIN}"
-    echo -e "    ${YELLOW}1${PLAIN}) GitHub  (github.com)"
-    echo -e "    ${YELLOW}2${PLAIN}) Gitee   (gitee.com)"
-    echo -ne "  ${CYAN}请选择${PLAIN} [1]: "
-    read -r host_choice
-    host_choice="${host_choice:-1}"
-    case "$host_choice" in
-        2) echo "${GITEE_BASE}/${input}.git" ;;
-        *) echo "${GITHUB_BASE}/${input}.git" ;;
-    esac
 }
 
 # 扫描系统可用 JDK，逐行输出路径
@@ -276,13 +263,13 @@ cmd_init() {
 
     echo ""
 
-    # Git 地址（智能补全）
-    echo -e "${CYAN}  Git 地址输入说明:${PLAIN}"
-    echo -e "  可以只输入项目名，例如 ${YELLOW}teaching-backend${PLAIN}"
-    echo -e "  将自动补全为 ${YELLOW}${GITEE_BASE}/teaching-backend.git${PLAIN}"
+    # Git 地址
+    echo -e "${CYAN}  Git 地址示例:${PLAIN}"
+    echo -e "    ${YELLOW}https://github.com/guwan/tongkey-backend${PLAIN}"
+    echo -e "    ${YELLOW}https://gitee.com/your-org/your-repo${PLAIN}"
 
     local git_input
-    read_input git_input "Git 仓库 (项目名或完整URL)" ""
+    read_input git_input "Git 仓库 (完整URL)" ""
     GIT_REPO=$(complete_git_url "$git_input")
     echo -e "  ${GREEN}✓ Git 地址: ${GIT_REPO}${PLAIN}"
 
