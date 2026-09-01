@@ -34,6 +34,7 @@ dependencies {
     implementation("com.mysql:mysql-connector-j")
     implementation("org.mariadb.jdbc:mariadb-java-client")
     implementation("com.oracle.database.jdbc:ojdbc11")
+    implementation("com.oracle.database.nls:orai18n")        // Oracle 国际化字符集（ZHS16GBK 等）
     implementation("com.microsoft.sqlserver:mssql-jdbc")
 
     // API 文档
