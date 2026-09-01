@@ -11,12 +11,25 @@
 
 # ─── 全局配置 ───────────────────────────────────────────────
 DEPLOY_CONFIG_DIR="${HOME}/.deploy/configs"
-GIT_BASE="https://github.com/guwan"
-DEFAULT_BRANCH="main"
+GITHUB_BASE="https://github.com"
+GITEE_BASE="https://gitee.com"
 DEFAULT_BACKEND_CODE_ROOT="/data/codes/backend"
 DEFAULT_FRONTEND_CODE_ROOT="/data/codes/frontend"
 DEFAULT_APP_ROOT="/app"
 DEFAULT_LOG_ROOT="/var/backend/logs"
+
+# 根据仓库 URL 推断默认主分支
+# GitHub 从 2020 年起默认 main；Gitee 历史项目多为 master
+detect_default_branch() {
+    local url="$1"
+    if [[ "$url" == *"gitee.com"* ]]; then
+        echo "master"
+    elif [[ "$url" == *"github.com"* ]]; then
+        echo "main"
+    else
+        echo "main"   # 未知平台默认 main
+    fi
+}
 
 # ─── 颜色 ───────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -90,14 +103,26 @@ extract_app_name() {
 }
 
 # 补全 git 地址：短名 → 完整 URL
+# 完整 URL（http/https/git@）直接返回；短名则让用户选 Gitee 还是 GitHub
 complete_git_url() {
     local input="$1"
     input="${input%/}"
     if [[ "$input" == http* ]] || [[ "$input" == git@* ]]; then
         echo "$input"
-    else
-        echo "${GIT_BASE}/${input}.git"
+        return
     fi
+    # 短名 → 让用户选平台
+    local host_choice
+    echo -e "${CYAN}  Git 平台:${PLAIN}"
+    echo -e "    ${YELLOW}1${PLAIN}) GitHub  (github.com)"
+    echo -e "    ${YELLOW}2${PLAIN}) Gitee   (gitee.com)"
+    echo -ne "  ${CYAN}请选择${PLAIN} [1]: "
+    read -r host_choice
+    host_choice="${host_choice:-1}"
+    case "$host_choice" in
+        2) echo "${GITEE_BASE}/${input}.git" ;;
+        *) echo "${GITHUB_BASE}/${input}.git" ;;
+    esac
 }
 
 # 扫描系统可用 JDK，逐行输出路径
@@ -266,8 +291,10 @@ cmd_init() {
     auto_name=$(extract_app_name "$GIT_REPO")
     read_input APP_PURE_NAME "应用名称" "$auto_name"
 
-    # Git 分支
-    read_input GIT_BRANCH "Git 分支" "$DEFAULT_BRANCH"
+    # Git 分支 — 根据仓库 URL 自动推断默认值
+    local auto_branch
+    auto_branch=$(detect_default_branch "$GIT_REPO")
+    read_input GIT_BRANCH "Git 分支" "$auto_branch"
 
     echo ""
 
