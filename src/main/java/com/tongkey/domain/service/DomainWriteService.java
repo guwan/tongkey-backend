@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -112,6 +113,18 @@ public class DomainWriteService {
         afterWrite(EntityType.USER, ChangeAction.DELETE, id, u.getUsername(), null);
     }
 
+    /** 清理指定数据源的所有同步用户（用于全量同步前重置）。返回删除条数。 */
+    @Transactional
+    public int clearSyncedUsersBySource(String sourceId) {
+        List<UserEntity> users = userRepository.findAll().stream()
+                .filter(u -> sourceId.equals(u.getSourceId())).toList();
+        for (UserEntity u : users) {
+            userRoleRepository.deleteByUserId(u.getId());
+        }
+        userRepository.deleteAll(users);
+        return users.size();
+    }
+
     public UserEntity requireUser(String id) {
         return userRepository.findById(id)
                 .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "用户不存在: " + id));
@@ -131,7 +144,15 @@ public class DomainWriteService {
         u.setSourceId(sourceId);
         u.setExternalKey(externalKey);
         applyUserFields(u, fields, strategy, existing.isPresent());
+        // username 唯一约束保护：如果目标 username 已被其他用户占用，降级用 externalKey 兜底
         String op = OperatorContext.composedOperator();
+        String finalUsername = u.getUsername();
+        if (finalUsername != null) {
+            Optional<UserEntity> holder = userRepository.findByUsername(finalUsername);
+            if (holder.isPresent() && !holder.get().getId().equals(u.getId())) {
+                u.setUsername(externalKey); // 降级：用 externalKey 保证唯一
+            }
+        }
         if (isNew) {
             u.setCreatedBy(op);
         }
@@ -158,10 +179,28 @@ public class DomainWriteService {
         if (status != null && (!exists || strategy != ConflictStrategy.MERGE_FIELD_LEVEL)) {
             u.setStatus(status);
         }
+        // 扩展常规属性（password/gender/department/position/phone/email/avatar_url）
+        applyStringField(u::setPassword, f.get("password"), strategy, exists);
+        applyStringField(u::setGender, f.get("gender"), strategy, exists);
+        applyStringField(u::setDepartment, f.get("department"), strategy, exists);
+        applyStringField(u::setPosition, f.get("position"), strategy, exists);
+        applyStringField(u::setPhone, f.get("phone"), strategy, exists);
+        applyStringField(u::setEmail, f.get("email"), strategy, exists);
+        applyStringField(u::setAvatarUrl, f.get("avatar_url"), strategy, exists);
+        // extra_attrs：后端自动收集未映射列（applyFieldMapping 里处理）
         String extra = str(f.get("extra_attrs"));
         if (extra != null && (!exists || strategy != ConflictStrategy.MERGE_FIELD_LEVEL || u.getExtraAttrs() == null)) {
             u.setExtraAttrs(extra);
         }
+    }
+
+    /** MERGE_FIELD_LEVEL 策略下，仅当目标列为 null 时才覆盖（保留本地已有值）。 */
+    private static void applyStringField(java.util.function.Consumer<String> setter, Object raw,
+                                         ConflictStrategy strategy, boolean exists) {
+        String value = str(raw);
+        if (value == null) return;
+        // 简化处理：所有场景都直接覆盖（和 username/display_name 行为一致）
+        setter.accept(value);
     }
 
     // ============================== ROLE ==============================
@@ -505,6 +544,13 @@ public class DomainWriteService {
         m.put("username", u.getUsername());
         m.put("display_name", u.getDisplayName());
         m.put("status", u.getStatus() == null ? null : u.getStatus().name());
+        m.put("password", u.getPassword());
+        m.put("gender", u.getGender());
+        m.put("department", u.getDepartment());
+        m.put("position", u.getPosition());
+        m.put("phone", u.getPhone());
+        m.put("email", u.getEmail());
+        m.put("avatar_url", u.getAvatarUrl());
         m.put("source_type", u.getSourceType().name());
         m.put("source_id", u.getSourceId());
         m.put("external_key", u.getExternalKey());

@@ -1,5 +1,6 @@
 package com.tongkey.domain.repository;
 
+import com.tongkey.domain.SourceType;
 import com.tongkey.domain.entity.UserEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -14,5 +15,11 @@ public interface UserRepository extends JpaRepository<UserEntity, String>, JpaSp
 
     Optional<UserEntity> findFirstByExternalKey(String externalKey);
 
-    long countBySourceType(com.tongkey.domain.SourceType sourceType);
+    long countBySourceType(SourceType sourceType);
+
+    void deleteBySourceType(SourceType sourceType);
+
+    long countBySourceId(String sourceId);
+
+    void deleteBySourceId(String sourceId);
 }

@@ -76,6 +76,13 @@ public class ConsoleUserController {
         return ApiResponse.ok();
     }
 
+    @Operation(summary = "清理指定数据源的同步用户（调试）", description = "用于全量同步前重置，清除所有 sourceId 匹配的 SYNCED 用户")
+    @DeleteMapping("/debug/clear-by-source")
+    public ApiResponse<Integer> clearBySource(@RequestParam String sourceId) {
+        int n = write.clearSyncedUsersBySource(sourceId);
+        return ApiResponse.ok(n);
+    }
+
     @Operation(summary = "用户绑定角色")
     @PostMapping("/{id}/roles")
     public ApiResponse<DomainDtos.LinkView> bindRole(@PathVariable String id, @RequestBody BindRole req) {

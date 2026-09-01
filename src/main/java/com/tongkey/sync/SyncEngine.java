@@ -211,36 +211,36 @@ public class SyncEngine {
 
     private void flushBatch(SyncMapping mapping, DataSourceConfig ds, Map<String, String> fieldMapping,
                             List<Map<String, Object>> rows, Set<String> seenExternalKeys, long[] counters) {
-        txTemplate.executeWithoutResult(status -> {
-            for (Map<String, Object> row : rows) {
-                try {
-                    Map<String, Object> fields = applyFieldMapping(fieldMapping, row);
-                    String externalKey = str(fields.get("external_key"));
-                    if (externalKey == null) {
-                        counters[3]++;
-                        continue;
-                    }
-                    seenExternalKeys.add(externalKey);
-                    ChangeAction action = switch (mapping.getTargetEntity()) {
-                        case USER -> writeService.upsertUserFromSync(ds.getId(), externalKey, fields, mapping.getConflictStrategy());
-                        case ROLE -> writeService.upsertRoleFromSync(ds.getId(), externalKey, fields, mapping.getConflictStrategy());
-                        case PERMISSION -> writeService.upsertPermissionFromSync(ds.getId(), externalKey, fields, mapping.getConflictStrategy());
-                        case USER_ROLE -> upsertUserRole(mapping, ds, fields, externalKey);
-                        case ROLE_PERMISSION -> upsertRolePermission(mapping, ds, fields, externalKey);
-                    };
-                    if (action == ChangeAction.CREATE) {
-                        counters[0]++;
-                    } else if (action == ChangeAction.UPDATE) {
-                        counters[1]++;
-                    } else {
-                        counters[2]++;
-                    }
-                } catch (Exception e) {
-                    log.warn("同步行处理失败: mapping={}, err={}", mapping.getName(), e.getMessage());
+        // 注：每条行调用 upsertXxxFromSync 有自己的 @Transactional 事务，不包大事务避免 Hibernate
+        // pending insert 导致后续 findByUsername/findBySourceIdAndExternalKey 查不到前序记录
+        for (Map<String, Object> row : rows) {
+            try {
+                Map<String, Object> fields = applyFieldMapping(fieldMapping, row);
+                String externalKey = str(fields.get("external_key"));
+                if (externalKey == null) {
                     counters[3]++;
+                    continue;
                 }
+                seenExternalKeys.add(externalKey);
+                ChangeAction action = switch (mapping.getTargetEntity()) {
+                    case USER -> writeService.upsertUserFromSync(ds.getId(), externalKey, fields, mapping.getConflictStrategy());
+                    case ROLE -> writeService.upsertRoleFromSync(ds.getId(), externalKey, fields, mapping.getConflictStrategy());
+                    case PERMISSION -> writeService.upsertPermissionFromSync(ds.getId(), externalKey, fields, mapping.getConflictStrategy());
+                    case USER_ROLE -> upsertUserRole(mapping, ds, fields, externalKey);
+                    case ROLE_PERMISSION -> upsertRolePermission(mapping, ds, fields, externalKey);
+                };
+                if (action == ChangeAction.CREATE) {
+                    counters[0]++;
+                } else if (action == ChangeAction.UPDATE) {
+                    counters[1]++;
+                } else {
+                    counters[2]++;
+                }
+            } catch (Exception e) {
+                log.warn("同步行处理失败: mapping={}, err={}", mapping.getName(), e.getMessage());
+                counters[3]++;
             }
-        });
+        }
     }
 
     private ChangeAction upsertUserRole(SyncMapping mapping, DataSourceConfig ds, Map<String, Object> fields, String externalKey) {

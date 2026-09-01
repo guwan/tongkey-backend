@@ -31,6 +31,29 @@ public class UserEntity extends TraceableEntity {
     @Column(nullable = false, length = 16)
     private EntityStatus status = EntityStatus.ENABLED;
 
+    @Column(length = 255)
+    private String password;
+
+    @Column(length = 32)
+    private String gender;
+
+    @Column(length = 255)
+    private String department;
+
+    @Column(length = 255)
+    private String position;
+
+    @Column(length = 32)
+    private String phone;
+
+    @Column(length = 255)
+    private String email;
+
+    @Column(name = "avatar_url", length = 512)
+    private String avatarUrl;
+
+    // ---- getter / setter ----
+
     public String getUsername() {
         return username;
     }
@@ -53,5 +76,61 @@ public class UserEntity extends TraceableEntity {
 
     public void setStatus(EntityStatus status) {
         this.status = status;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
+    public String getGender() {
+        return gender;
+    }
+
+    public void setGender(String gender) {
+        this.gender = gender;
+    }
+
+    public String getDepartment() {
+        return department;
+    }
+
+    public void setDepartment(String department) {
+        this.department = department;
+    }
+
+    public String getPosition() {
+        return position;
+    }
+
+    public void setPosition(String position) {
+        this.position = position;
+    }
+
+    public String getPhone() {
+        return phone;
+    }
+
+    public void setPhone(String phone) {
+        this.phone = phone;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public String getAvatarUrl() {
+        return avatarUrl;
+    }
+
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
     }
 }
