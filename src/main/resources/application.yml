@@ -10,7 +10,7 @@ spring:
   application:
     name: tongkey-server
   profiles:
-    active: "dev,local"
+    active: "dev"
   threads:
     virtual:
       enabled: true            # 虚拟线程：支撑同步/推送的高并发低开销
