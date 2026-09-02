@@ -7,9 +7,8 @@ plugins {
 group = "com.tongkey"
 version = "1.0.0"
 
-java {
-    toolchain {
-        languageVersion.set(JavaLanguageVersion.of(24))
+java {toolchain {
+        languageVersion.set(JavaLanguageVersion.of(25))
     }
 }
 
