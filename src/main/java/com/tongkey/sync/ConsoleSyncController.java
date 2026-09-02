@@ -36,20 +36,22 @@ public class ConsoleSyncController {
     private final SyncMappingRepository mappingRepository;
     private final SyncLogRepository syncLogRepository;
     private final SyncEngine syncEngine;
+    private final SyncScheduler scheduler;
     private final SqlReadonlyValidator sqlValidator;
 
     public ConsoleSyncController(SyncMappingRepository mappingRepository, SyncLogRepository syncLogRepository,
-                                 SyncEngine syncEngine, SqlReadonlyValidator sqlValidator) {
+                                 SyncEngine syncEngine, SyncScheduler scheduler, SqlReadonlyValidator sqlValidator) {
         this.mappingRepository = mappingRepository;
         this.syncLogRepository = syncLogRepository;
         this.syncEngine = syncEngine;
+        this.scheduler = scheduler;
         this.sqlValidator = sqlValidator;
     }
 
     public record MappingRequest(@NotBlank String name, @NotNull EntityType targetEntity, @NotBlank String sqlText,
                                  @NotBlank String fieldMapping, ConflictStrategy conflictStrategy,
                                  Integer batchSize, Boolean enabled,
-                                 SyncMode syncMode, String incrementalColumn) {
+                                 SyncMode syncMode, String incrementalColumn, String scheduleCron) {
     }
 
     @Operation(summary = "数据源下的映射任务列表")
@@ -66,7 +68,9 @@ public class ConsoleSyncController {
         SyncMapping m = new SyncMapping();
         m.setDataSourceId(dsId);
         apply(m, req);
-        return ApiResponse.ok(mappingRepository.save(m));
+        SyncMapping saved = mappingRepository.save(m);
+        scheduler.refresh();
+        return ApiResponse.ok(saved);
     }
 
     @Operation(summary = "更新映射任务")
@@ -76,7 +80,9 @@ public class ConsoleSyncController {
         SyncMapping m = requireMapping(id);
         sqlValidator.validate(req.sqlText());
         apply(m, req);
-        return ApiResponse.ok(mappingRepository.save(m));
+        SyncMapping saved = mappingRepository.save(m);
+        scheduler.refresh();
+        return ApiResponse.ok(saved);
     }
 
     @Operation(summary = "删除映射任务")
@@ -84,6 +90,7 @@ public class ConsoleSyncController {
     public ApiResponse<Void> deleteMapping(@PathVariable String id) {
         requireMapping(id);
         mappingRepository.deleteById(id);
+        scheduler.refresh();
         return ApiResponse.ok();
     }
 
@@ -144,5 +151,7 @@ public class ConsoleSyncController {
         m.setEnabled(r.enabled() == null || r.enabled());
         m.setSyncMode(r.syncMode() != null ? r.syncMode() : SyncMode.FULL);
         m.setIncrementalColumn(r.incrementalColumn());
+        String cron = r.scheduleCron();
+        m.setScheduleCron(cron == null || cron.isBlank() ? null : cron.trim());
     }
 }

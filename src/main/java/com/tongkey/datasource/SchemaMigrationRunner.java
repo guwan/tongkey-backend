@@ -26,6 +26,7 @@ public class SchemaMigrationRunner implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         safeAlter("ALTER TABLE tk_sync_mapping ADD COLUMN sync_mode VARCHAR(16) NOT NULL DEFAULT 'FULL'");
         safeAlter("ALTER TABLE tk_sync_mapping ADD COLUMN incremental_column VARCHAR(128)");
+        safeAlter("ALTER TABLE tk_sync_mapping ADD COLUMN schedule_cron VARCHAR(64)");
     }
 
     private void safeAlter(String sql) {

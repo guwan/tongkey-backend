@@ -69,6 +69,10 @@ public class SyncMapping {
     @Column(name = "incremental_column", length = 128)
     private String incrementalColumn;
 
+    /** 映射级 cron 表达式（可空）。设置后独立注册定时任务；留空则仅跟随数据源级调度或手动触发。 */
+    @Column(name = "schedule_cron", length = 64)
+    private String scheduleCron;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -183,6 +187,14 @@ public class SyncMapping {
 
     public void setIncrementalColumn(String incrementalColumn) {
         this.incrementalColumn = incrementalColumn;
+    }
+
+    public String getScheduleCron() {
+        return scheduleCron;
+    }
+
+    public void setScheduleCron(String scheduleCron) {
+        this.scheduleCron = scheduleCron;
     }
 
     public Instant getCreatedAt() {
