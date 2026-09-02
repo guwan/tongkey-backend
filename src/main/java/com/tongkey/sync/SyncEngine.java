@@ -135,8 +135,8 @@ public class SyncEngine {
     private void execute(SyncMapping mapping, DataSourceConfig ds, SyncLog syncLog) {
         String baseSql = sqlValidator.validate(mapping.getSqlText());
         Map<String, String> fieldMapping = parseFieldMapping(mapping.getFieldMapping());
-        boolean incremental = ds.getSyncMode() == SyncMode.INCREMENTAL;
-        if (incremental && (ds.getIncrementalColumn() == null || ds.getIncrementalColumn().isBlank())
+        boolean incremental = mapping.getSyncMode() == SyncMode.INCREMENTAL;
+        if (incremental && (mapping.getIncrementalColumn() == null || mapping.getIncrementalColumn().isBlank())
                 && !baseSql.contains(":" + LAST_SYNC_PARAM)) {
             throw new ApiException(ErrorCode.INVALID_PARAM, "增量模式需配置增量字段或在 SQL 中使用 :" + LAST_SYNC_PARAM + " 占位符");
         }
@@ -153,13 +153,13 @@ public class SyncEngine {
             if (sql.contains(":" + LAST_SYNC_PARAM)) {
                 params.addValue(LAST_SYNC_PARAM, bindValue);
             } else if (watermark != null) {
-                sql = "SELECT * FROM (" + sql + ") tk_incr WHERE " + ds.getIncrementalColumn() + " > :" + LAST_SYNC_PARAM;
+                sql = "SELECT * FROM (" + sql + ") tk_incr WHERE " + mapping.getIncrementalColumn() + " > :" + LAST_SYNC_PARAM;
                 params.addValue(LAST_SYNC_PARAM, bindValue);
             }
         }
 
         // 先计算本次集合的水位（用于成功后更新），基于同一过滤集合
-        String watermarkCol = ds.getIncrementalColumn();
+        String watermarkCol = mapping.getIncrementalColumn();
         Object newWatermark = null;
         if (incremental && watermarkCol != null && !watermarkCol.isBlank()) {
             try {

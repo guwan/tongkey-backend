@@ -34,16 +34,15 @@ public class ConsoleDataSourceController {
 
     public record DataSourceRequest(@NotBlank String name, @NotNull DbType dbType, @NotBlank String jdbcUrl,
                                     String username, String password, Boolean enabled, String scheduleCron,
-                                    SyncMode syncMode, String incrementalColumn, Integer connectTimeoutSeconds,
-                                    String notes) {
+                                    Integer connectTimeoutSeconds, String notes) {
     }
 
     public record DataSourceView(String id, String name, DbType dbType, String jdbcUrl, String username,
-                                 boolean enabled, String scheduleCron, SyncMode syncMode, String incrementalColumn,
+                                 boolean enabled, String scheduleCron,
                                  int connectTimeoutSeconds, String notes, Instant createdAt, Instant updatedAt) {
         static DataSourceView of(DataSourceConfig c) {
             return new DataSourceView(c.getId(), c.getName(), c.getDbType(), c.getJdbcUrl(), c.getUsername(),
-                    c.isEnabled(), c.getScheduleCron(), c.getSyncMode(), c.getIncrementalColumn(),
+                    c.isEnabled(), c.getScheduleCron(),
                     c.getConnectTimeoutSeconds(), c.getNotes(), c.getCreatedAt(), c.getUpdatedAt());
         }
     }
@@ -92,8 +91,6 @@ public class ConsoleDataSourceController {
         c.setPassword(r.password());
         c.setEnabled(r.enabled() == null || r.enabled());
         c.setScheduleCron(r.scheduleCron());
-        c.setSyncMode(r.syncMode() != null ? r.syncMode() : SyncMode.FULL);
-        c.setIncrementalColumn(r.incrementalColumn());
         c.setConnectTimeoutSeconds(r.connectTimeoutSeconds() != null ? r.connectTimeoutSeconds() : 10);
         c.setNotes(r.notes());
         return c;

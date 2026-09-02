@@ -4,6 +4,7 @@ import com.tongkey.common.ApiException;
 import com.tongkey.common.ApiResponse;
 import com.tongkey.common.ErrorCode;
 import com.tongkey.common.PageData;
+import com.tongkey.datasource.SyncMode;
 import com.tongkey.domain.ConflictStrategy;
 import com.tongkey.domain.EntityType;
 import io.swagger.v3.oas.annotations.Operation;
@@ -47,7 +48,8 @@ public class ConsoleSyncController {
 
     public record MappingRequest(@NotBlank String name, @NotNull EntityType targetEntity, @NotBlank String sqlText,
                                  @NotBlank String fieldMapping, ConflictStrategy conflictStrategy,
-                                 Integer batchSize, Boolean enabled) {
+                                 Integer batchSize, Boolean enabled,
+                                 SyncMode syncMode, String incrementalColumn) {
     }
 
     @Operation(summary = "数据源下的映射任务列表")
@@ -140,5 +142,7 @@ public class ConsoleSyncController {
         m.setConflictStrategy(r.conflictStrategy() != null ? r.conflictStrategy() : ConflictStrategy.SYNC_OVERRIDE);
         m.setBatchSize(r.batchSize() != null && r.batchSize() > 0 ? r.batchSize() : 500);
         m.setEnabled(r.enabled() == null || r.enabled());
+        m.setSyncMode(r.syncMode() != null ? r.syncMode() : SyncMode.FULL);
+        m.setIncrementalColumn(r.incrementalColumn());
     }
 }

@@ -1,5 +1,6 @@
 package com.tongkey.sync;
 
+import com.tongkey.datasource.SyncMode;
 import com.tongkey.domain.ConflictStrategy;
 import com.tongkey.domain.EntityType;
 import jakarta.persistence.Column;
@@ -58,6 +59,15 @@ public class SyncMapping {
     /** 增量同步水位：上次同步到的增量列最大值 */
     @Column(name = "last_sync_value", length = 128)
     private String lastSyncValue;
+
+    /** 同步模式：FULL（全量）/ INCREMENTAL（增量），每个映射独立配置 */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sync_mode", nullable = false, length = 16)
+    private SyncMode syncMode = SyncMode.FULL;
+
+    /** 增量同步依据字段（仅增量模式使用），如 UPDATE_ON */
+    @Column(name = "incremental_column", length = 128)
+    private String incrementalColumn;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -157,6 +167,22 @@ public class SyncMapping {
 
     public void setLastSyncValue(String lastSyncValue) {
         this.lastSyncValue = lastSyncValue;
+    }
+
+    public SyncMode getSyncMode() {
+        return syncMode;
+    }
+
+    public void setSyncMode(SyncMode syncMode) {
+        this.syncMode = syncMode;
+    }
+
+    public String getIncrementalColumn() {
+        return incrementalColumn;
+    }
+
+    public void setIncrementalColumn(String incrementalColumn) {
+        this.incrementalColumn = incrementalColumn;
     }
 
     public Instant getCreatedAt() {

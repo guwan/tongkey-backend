@@ -62,8 +62,6 @@ public class DataSourceService {
         }
         cfg.setEnabled(req.isEnabled());
         cfg.setScheduleCron(req.getScheduleCron());
-        cfg.setSyncMode(req.getSyncMode());
-        cfg.setIncrementalColumn(req.getIncrementalColumn());
         cfg.setConnectTimeoutSeconds(req.getConnectTimeoutSeconds() > 0 ? req.getConnectTimeoutSeconds() : 10);
         cfg.setNotes(req.getNotes());
         cfg = repository.save(cfg);

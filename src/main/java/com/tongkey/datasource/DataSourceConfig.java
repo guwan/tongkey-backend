@@ -48,14 +48,6 @@ public class DataSourceConfig {
     @Column(name = "schedule_cron", length = 64)
     private String scheduleCron;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "sync_mode", nullable = false, length = 16)
-    private SyncMode syncMode = SyncMode.FULL;
-
-    /** 增量同步依据字段，如 update_time */
-    @Column(name = "incremental_column", length = 128)
-    private String incrementalColumn;
-
     /** 连接超时（秒） */
     @Column(name = "connect_timeout_seconds")
     private int connectTimeoutSeconds = 10;
@@ -145,22 +137,6 @@ public class DataSourceConfig {
 
     public void setScheduleCron(String scheduleCron) {
         this.scheduleCron = scheduleCron;
-    }
-
-    public SyncMode getSyncMode() {
-        return syncMode;
-    }
-
-    public void setSyncMode(SyncMode syncMode) {
-        this.syncMode = syncMode;
-    }
-
-    public String getIncrementalColumn() {
-        return incrementalColumn;
-    }
-
-    public void setIncrementalColumn(String incrementalColumn) {
-        this.incrementalColumn = incrementalColumn;
     }
 
     public int getConnectTimeoutSeconds() {
