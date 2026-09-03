@@ -96,13 +96,20 @@ public class ConsoleClientController {
         return ApiResponse.ok(ClientView.of(c));
     }
 
-    @Operation(summary = "重置 API Key", description = "旧 Key 立即失效")
+    @Operation(summary = "重置 API Key 与 Secret", description = "旧 Key/Secret 立即失效")
     @PostMapping("/{id}/reset-key")
     public ApiResponse<Map<String, Object>> resetKey(@PathVariable String id) {
         ClientEntity c = require(id);
         c.setApiKey("tk_" + randomToken(24));
+        String plainSecret = randomToken(32);
+        c.setClientSecret(crypto.encrypt(plainSecret));
         c = clientRepository.save(c);
-        return ApiResponse.ok(Map.of("clientId", c.getClientId(), "apiKey", c.getApiKey()));
+        rateLimiter.evict(c.getClientId());
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("clientId", c.getClientId());
+        data.put("apiKey", c.getApiKey());
+        data.put("clientSecret", plainSecret);
+        return ApiResponse.ok(data);
     }
 
     @Operation(summary = "删除接入方")
