@@ -511,46 +511,59 @@ start_app() {
 
     cd "${APP_HOME}" || exit 1
 
-    # ── 1. 自动 source 部署目录下的 .env（如果存在）────────────────
-    if [ -f ".env" ]; then
-        print_step "加载环境变量文件: ${APP_HOME}/.env"
-        # shellcheck disable=SC1091
-        set -a
-        . ".env"
-        set +a
+    # ── 1. 收集 Spring Boot 外部配置文件 ──────────────────────────
+    # 使用环境变量 SPRING_CONFIG_IMPORT 传递路径，让 Spring Boot 4.x
+    # 通过 Config Data API 合并加载。避免 --xxx=yyy 命令行参数被 JVM 误解析
+    # （Java 25 launcher 对 --key=value 格式报 "Unrecognized option"）。
+    # 支持两种方式：
+    #   a) 默认约定：APP_HOME/application-secret.yml（推荐）
+    #   b) 自定义路径：deploy conf 里的 APP_CONFIG_FILE
+    local import_items=()
+
+    # 默认约定：APP_HOME/application-secret.yml
+    local default_secret="${APP_HOME}/application-secret.yml"
+    if [ -f "${default_secret}" ]; then
+        import_items+=("file:${default_secret}")
+        print_step "Spring Boot 外部配置（默认）: ${default_secret}"
+    fi
+
+    # 用户自定义路径（如果 APP_CONFIG_FILE 已设置且存在）
+    if [ -n "${APP_CONFIG_FILE}" ]; then
+        local abs_config="${APP_CONFIG_FILE}"
+        if [[ "$abs_config" != /* ]]; then
+            abs_config="${APP_HOME}/${abs_config}"
+        fi
+        if [ -f "${abs_config}" ]; then
+            import_items+=("file:${abs_config}")
+            print_step "Spring Boot 外部配置（自定义）: ${abs_config}"
+        else
+            print_warn "自定义配置文件不存在，跳过: ${abs_config}"
+        fi
+    fi
+
+    if [ ${#import_items[@]} -gt 0 ]; then
+        export SPRING_CONFIG_IMPORT="${import_items[*]}"
+        print_step "SPRING_CONFIG_IMPORT=${SPRING_CONFIG_IMPORT}"
     fi
 
     # ── 2. 构建 Java 命令 ──────────────────────────────────────────
     local java_bin="${APP_JAVA_HOME}/bin/java"
     [ ! -x "$java_bin" ] && java_bin="java"
 
+    # 确保日志目录存在（Spring Boot logback-spring.xml 往这个目录写文件日志）
+    mkdir -p "${LOG_PATH}"
+
     # JVM 内存参数
     local jvm_memory=""
     [ -n "${JVM_XMS}" ] && jvm_memory="-Xms${JVM_XMS}"
     [ -n "${JVM_XMX}" ] && jvm_memory="${jvm_memory} -Xmx${JVM_XMX}"
 
-    # Spring profiles 支持多环境叠加（例: dev,local / prod,secret）
-    local spring_profile_arg="-Dspring.profiles.active=${SPRING_PROFILE:-dev}"
+    # Spring profiles + 日志路径（-D 是 JVM 标准系统属性格式）
+    local profile="${SPRING_PROFILE:-dev}"
+    local jvm_sysargs="-Dspring.profiles.active=${profile} -Dtongkey.log.path=${LOG_PATH}"
 
-    # 外部配置文件（放在 APP_HOME 下，不进 git）
-    local config_extra_arg=""
-    if [ -n "${APP_CONFIG_FILE}" ]; then
-        # 允许 APP_CONFIG_FILE 用相对路径（相对于 APP_HOME）或绝对路径
-        local abs_config="${APP_CONFIG_FILE}"
-        if [[ "$abs_config" != /* ]]; then
-            abs_config="${APP_HOME}/${abs_config}"
-        fi
-        if [ -f "${abs_config}" ]; then
-            config_extra_arg="--spring.config.additional-location=file:${abs_config}"
-            print_step "外部配置文件: ${abs_config}"
-        else
-            print_warn "外部配置文件不存在，跳过: ${abs_config}"
-        fi
-    fi
-
-    # 完整命令
-    local start_cmd="${java_bin} ${jvm_memory} ${JVM_EXTRA_OPTS} ${spring_profile_arg}"
-    start_cmd="${start_cmd} ${config_extra_arg}"
+    # 完整命令 —— 所有 --xxx=yyy 参数都已替换为环境变量或 -D 格式
+    local start_cmd="${java_bin} ${jvm_memory} ${JVM_EXTRA_OPTS} ${jvm_sysargs}"
     start_cmd="${start_cmd} -jar ${APP_PURE_NAME}.jar"
 
     print_step "启动命令:"
