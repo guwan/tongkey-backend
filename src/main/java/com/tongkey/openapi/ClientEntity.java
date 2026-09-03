@@ -39,7 +39,7 @@ public class ClientEntity {
     @Column(name = "api_key", nullable = false, length = 64)
     private String apiKey;
 
-    /** 授权范围，逗号分隔：user:read,user:write,role:read,role:write,permission:read,permission:write,user_role:write,role_permission:write,change:read */
+    /** 授权范围，逗号分隔：user:read,user:write,role:read,role:write,permission:read,permission:write,user_role:write,role_permission:write,change:read,sync:run */
     @Column(nullable = false, length = 1024)
     private String scopes = "user:read,role:read,permission:read";
 
