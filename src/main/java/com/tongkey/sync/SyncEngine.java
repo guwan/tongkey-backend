@@ -93,6 +93,11 @@ public class SyncEngine {
 
     /** 执行数据源下全部启用的映射任务。 */
     public List<SyncLog> runDataSource(String dataSourceId, SyncLog.SyncTrigger trigger) {
+        DataSourceConfig ds = dataSourceRepository.findById(dataSourceId)
+                .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "数据源不存在: " + dataSourceId));
+        if (!ds.isEnabled()) {
+            throw new ApiException(ErrorCode.FORBIDDEN, "数据源已禁用，无法执行: " + ds.getName());
+        }
         List<SyncLog> logs = new ArrayList<>();
         for (SyncMapping m : mappingRepository.findByDataSourceIdAndEnabledTrue(dataSourceId)) {
             logs.add(runMapping(m.getId(), trigger));
@@ -105,6 +110,13 @@ public class SyncEngine {
                 .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "映射配置不存在: " + mappingId));
         DataSourceConfig ds = dataSourceRepository.findById(mapping.getDataSourceId())
                 .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "数据源不存在: " + mapping.getDataSourceId()));
+
+        if (!mapping.isEnabled()) {
+            throw new ApiException(ErrorCode.FORBIDDEN, "映射已禁用，无法执行: " + mapping.getName());
+        }
+        if (!ds.isEnabled()) {
+            throw new ApiException(ErrorCode.FORBIDDEN, "数据源已禁用，无法执行: " + ds.getName());
+        }
 
         SyncLog syncLog = new SyncLog();
         syncLog.setMappingId(mapping.getId());

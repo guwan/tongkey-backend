@@ -6,7 +6,7 @@ TongKey 开放式授权中心后端服务。用户 / 角色 / 权限数据中心
 
 | 组件 | 技术 |
 |---|---|
-| 语言 | Java 24（Gradle toolchain 自动下载） |
+| 语言 | Java 25（Gradle toolchain 自动下载） |
 | 框架 | Spring Boot 4.1.1 / Spring Data JPA / Spring Security |
 | 数据库 | PostgreSQL 17（开发环境 Hibernate 自动建表） |
 | API 文档 | springdoc-openapi 3.1.0 / Swagger UI |
@@ -85,7 +85,7 @@ SPRING_PROFILES_ACTIVE=dev,local ./gradlew bootRun
 
 ### 环境要求
 
-- **JDK 24** — Gradle toolchain 会自动下载所需 JDK，也可手动设置 `JAVA_HOME`
+- **JDK 25** — Gradle toolchain 会自动下载所需 JDK，也可手动设置 `JAVA_HOME`
 - **PostgreSQL 17+**
 
 ### 1. 创建数据库
@@ -128,7 +128,7 @@ spring:
 ./gradlew bootJar
 ```
 
-Gradle Wrapper 会自动下载 Gradle 8.14（无需全局安装）。首次运行 Gradle toolchain 会自动下载 JDK 24。
+Gradle Wrapper 会自动下载 Gradle 8.14（无需全局安装）。首次运行 Gradle toolchain 会自动下载 JDK 25。
 
 #### 通过代理下载（国内网络）
 
