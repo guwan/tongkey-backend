@@ -24,13 +24,13 @@ public final class DomainDtos {
 
     public record UserView(String id, String username, String displayName, String status, String sourceType,
                            String sourceId, String externalKey, String extraAttrs,
-                           String password, String gender, String department, String position,
+                           String gender, String department, String position,
                            String phone, String email, String avatarUrl,
                            Instant createdAt, Instant updatedAt, String createdBy, String updatedBy) {
         public static UserView of(UserEntity u) {
             return new UserView(u.getId(), u.getUsername(), u.getDisplayName(), u.getStatus().name(),
                     u.getSourceType().name(), u.getSourceId(), u.getExternalKey(), u.getExtraAttrs(),
-                    u.getPassword(), u.getGender(), u.getDepartment(), u.getPosition(),
+                    u.getGender(), u.getDepartment(), u.getPosition(),
                     u.getPhone(), u.getEmail(), u.getAvatarUrl(),
                     u.getCreatedAt(), u.getUpdatedAt(), u.getCreatedBy(), u.getUpdatedBy());
         }

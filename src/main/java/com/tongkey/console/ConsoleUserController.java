@@ -1,6 +1,8 @@
 package com.tongkey.console;
 
 import com.tongkey.common.ApiResponse;
+import com.tongkey.common.CryptoUtil;
+import com.tongkey.common.ErrorCode;
 import com.tongkey.common.OperatorContext;
 import com.tongkey.common.PageData;
 import com.tongkey.domain.EntityStatus;
@@ -30,10 +32,12 @@ public class ConsoleUserController {
 
     private final DomainQueryService query;
     private final DomainWriteService write;
+    private final CryptoUtil crypto;
 
-    public ConsoleUserController(DomainQueryService query, DomainWriteService write) {
+    public ConsoleUserController(DomainQueryService query, DomainWriteService write, CryptoUtil crypto) {
         this.query = query;
         this.write = write;
+        this.crypto = crypto;
     }
 
     @Operation(summary = "分页查询用户", description = "支持关键字（用户名/显示名）、来源类型、状态过滤")
@@ -58,8 +62,13 @@ public class ConsoleUserController {
     @PostMapping
     public ApiResponse<DomainDtos.UserView> create(@RequestBody @jakarta.validation.Valid UserCreate req) {
         OperatorContext.set(OperatorContext.operator(), OperatorContext.CHANNEL_CONSOLE);
-        return ApiResponse.ok(DomainDtos.UserView.of(write.createUser(req.username(), req.displayName(),
-                parseStatus(req.status()), req.extraAttrs())));
+        var created = write.createUser(req.username(), req.displayName(),
+                parseStatus(req.status()), req.extraAttrs());
+        if (req.password() != null && !req.password().isBlank()) {
+            validatePasswordStrength(req.password());
+            write.setUserPassword(created.getId(), crypto.encrypt(req.password()));
+        }
+        return ApiResponse.ok(DomainDtos.UserView.of(created));
     }
 
     @Operation(summary = "更新用户")
@@ -67,6 +76,15 @@ public class ConsoleUserController {
     public ApiResponse<DomainDtos.UserView> update(@PathVariable String id, @RequestBody DomainDtos.UserRequest req) {
         return ApiResponse.ok(DomainDtos.UserView.of(write.updateUser(id, req.displayName(),
                 parseStatus(req.status()), req.extraAttrs())));
+    }
+
+    @Operation(summary = "设置/重置用户登录密码", description = "密码以 AES-GCM 加密存储，仅用于 OAuth2 授权页登录；接口永不返回密码")
+    @PutMapping("/{id}/password")
+    public ApiResponse<Void> setPassword(@PathVariable String id,
+                                         @RequestBody @jakarta.validation.Valid PasswordRequest req) {
+        validatePasswordStrength(req.password());
+        write.setUserPassword(id, crypto.encrypt(req.password()));
+        return ApiResponse.ok();
     }
 
     @Operation(summary = "删除用户")
@@ -96,7 +114,18 @@ public class ConsoleUserController {
         return ApiResponse.ok();
     }
 
-    public record UserCreate(@NotBlank String username, String displayName, String status, String extraAttrs) {
+    public record UserCreate(@NotBlank String username, String displayName, String status, String extraAttrs,
+                             String password) {
+    }
+
+    public record PasswordRequest(@NotBlank @jakarta.validation.constraints.Size(min = 6, max = 128,
+            message = "密码长度需在 6-128 位之间") String password) {
+    }
+
+    private static void validatePasswordStrength(String raw) {
+        if (raw == null || raw.length() < 6 || raw.length() > 128) {
+            throw new com.tongkey.common.ApiException(ErrorCode.INVALID_PARAM, "密码长度需在 6-128 位之间");
+        }
     }
 
     public record BindRole(@NotBlank String roleId) {

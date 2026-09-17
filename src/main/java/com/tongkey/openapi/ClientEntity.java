@@ -39,9 +39,15 @@ public class ClientEntity {
     @Column(name = "api_key", nullable = false, length = 64)
     private String apiKey;
 
-    /** 授权范围，逗号分隔：user:read,user:write,role:read,role:write,permission:read,permission:write,user_role:write,role_permission:write,change:read,sync:run */
+    /** 授权范围，逗号分隔：user:read,user:write,role:read,role:write,permission:read,permission:write,user_role:write,role_permission:write,change:read,sync:run,oauth2:login */
     @Column(nullable = false, length = 1024)
     private String scopes = "user:read,role:read,permission:read";
+
+    /**
+     * OAuth2 授权码流程允许的重定向 URI 白名单（一行一个或逗号分隔），授权时必须精确匹配。
+     */
+    @Column(name = "redirect_uris", columnDefinition = "text")
+    private String redirectUris;
 
     /** 每秒请求上限（令牌桶） */
     @Column(name = "qps_limit")
@@ -116,6 +122,14 @@ public class ClientEntity {
 
     public void setScopes(String scopes) {
         this.scopes = scopes;
+    }
+
+    public String getRedirectUris() {
+        return redirectUris;
+    }
+
+    public void setRedirectUris(String redirectUris) {
+        this.redirectUris = redirectUris;
     }
 
     public int getQpsLimit() {

@@ -105,6 +105,19 @@ public class DomainWriteService {
         return u;
     }
 
+    /**
+     * 设置/重置用户登录密码。传入值应为已加密的存储形式（如 AES-GCM ENC: 前缀）。
+     * 不返回用户实体，避免密码经响应链路外泄。
+     */
+    @Transactional
+    public void setUserPassword(String id, String storedPassword) {
+        UserEntity u = requireUser(id);
+        u.setPassword(storedPassword);
+        u.setUpdatedBy(OperatorContext.composedOperator());
+        userRepository.save(u);
+        afterWrite(EntityType.USER, ChangeAction.UPDATE, u.getId(), u.getUsername(), snapshot(u));
+    }
+
     @Transactional
     public void deleteUser(String id) {
         UserEntity u = requireUser(id);
@@ -544,7 +557,7 @@ public class DomainWriteService {
         m.put("username", u.getUsername());
         m.put("display_name", u.getDisplayName());
         m.put("status", u.getStatus() == null ? null : u.getStatus().name());
-        m.put("password", u.getPassword());
+        m.put("password", u.getPassword() == null ? null : "***"); // 密码绝不进入事件/推送载荷
         m.put("gender", u.getGender());
         m.put("department", u.getDepartment());
         m.put("position", u.getPosition());

@@ -147,7 +147,8 @@ $env:GRADLE_OPTS = "-Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=7890 -Dhttps.pro
 | Swagger UI | `http://localhost:8080/swagger-ui/index.html` |
 | OpenAPI 文档 | `GET http://localhost:8080/v3/api-docs` |
 | 管理控制台登录 | `POST http://localhost:8080/console/auth/login` |
-| 开放 API | `http://localhost:8080/api/v1/**`（需 X-API-Key） |
+| 开放 API | `http://localhost:8080/api/v1/**`（需 X-API-Key 或 OAuth2 Bearer） |
+| OAuth2 授权 | `http://localhost:8080/oauth2/authorize`、`POST /oauth2/token`（授权码模式，详见控制台「文档 → OAuth 2.0 登录授权」） |
 
 ### 5. 环境变量（覆盖配置文件）
 
@@ -160,6 +161,7 @@ $env:GRADLE_OPTS = "-Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=7890 -Dhttps.pro
 | `TONGKEY_DB_USER` | 数据库用户名 | ✅（prod 必填） |
 | `TONGKEY_DB_PASSWORD` | 数据库密码 | ✅（prod 必填） |
 | `TONGKEY_CRYPTO_KEY` | 敏感字段 AES 加密密钥 | ✅（prod 必填） |
+| `TONGKEY_OAUTH_JWT_SECRET` | OAuth2 JWT/会话 Cookie 的 HS256 签名密钥（至少 32 字符随机串，可用 `openssl rand -base64 48` 生成） | ✅（prod 必填） |
 | `TONGKEY_ADMIN_PASSWORD` | 控制台管理员密码 | ✅（prod 必填） |
 
 ## 常用 Gradle 命令
@@ -240,6 +242,7 @@ TONGKEY_DB_URL=jdbc:postgresql://your-prod-db:5432/tongkey
 TONGKEY_DB_USER=tongkey_app
 TONGKEY_DB_PASSWORD=your-real-db-password
 TONGKEY_CRYPTO_KEY=your-32-char-random-key
+TONGKEY_OAUTH_JWT_SECRET=your-oauth2-jwt-secret-at-least-32-chars
 TONGKEY_ADMIN_PASSWORD=your-strong-admin-password
 ```
 

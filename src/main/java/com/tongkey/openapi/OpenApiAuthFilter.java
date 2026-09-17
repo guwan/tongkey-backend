@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tongkey.common.ApiResponse;
 import com.tongkey.common.CryptoUtil;
 import com.tongkey.common.ErrorCode;
+import com.tongkey.oauth2.JwtTokenService;
 import com.tongkey.push.PushEngine;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ReadListener;
@@ -23,6 +24,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Instant;
 
 /**
@@ -43,17 +45,20 @@ public class OpenApiAuthFilter extends OncePerRequestFilter {
     private final ApiAccessLogRepository accessLogRepository;
     private final RateLimiterRegistry rateLimiter;
     private final CryptoUtil crypto;
+    private final JwtTokenService jwtTokenService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Value("${tongkey.openapi.signature-max-skew-seconds:300}")
     private long maxSkewSeconds;
 
     public OpenApiAuthFilter(ClientRepository clientRepository, ApiAccessLogRepository accessLogRepository,
-                             RateLimiterRegistry rateLimiter, CryptoUtil crypto) {
+                             RateLimiterRegistry rateLimiter, CryptoUtil crypto,
+                             JwtTokenService jwtTokenService) {
         this.clientRepository = clientRepository;
         this.accessLogRepository = accessLogRepository;
         this.rateLimiter = rateLimiter;
         this.crypto = crypto;
+        this.jwtTokenService = jwtTokenService;
     }
 
     @Override
@@ -66,8 +71,31 @@ public class OpenApiAuthFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         long start = System.currentTimeMillis();
         CachedBodyRequestWrapper wrapped = new CachedBodyRequestWrapper(request);
+
+        // 双通道：X-API-Key 优先；缺省时尝试 OAuth2 Bearer JWT
         String apiKey = wrapped.getHeader("X-API-Key");
-        ClientEntity client = apiKey == null ? null : clientRepository.findByApiKey(apiKey).orElse(null);
+        JwtTokenService.AccessTokenClaims claims = null;
+        ClientEntity client;
+        boolean oauthChannel = false;
+
+        if (apiKey != null) {
+            client = clientRepository.findByApiKey(apiKey).orElse(null);
+        } else {
+            String auth = wrapped.getHeader("Authorization");
+            String bearer = auth != null && auth.regionMatches(true, 0, "Bearer ", 0, 7)
+                    ? auth.substring(7).trim() : null;
+            if (bearer != null) {
+                claims = jwtTokenService.verifyAccessToken(bearer);
+                if (claims != null && claims.clientId() != null) {
+                    client = clientRepository.findByClientId(claims.clientId()).orElse(null);
+                    oauthChannel = true;
+                } else {
+                    client = null;
+                }
+            } else {
+                client = null;
+            }
+        }
 
         ErrorCode deny = null;
         if (client == null) {
@@ -76,17 +104,23 @@ public class OpenApiAuthFilter extends OncePerRequestFilter {
             deny = ErrorCode.FORBIDDEN;
         } else if (!rateLimiter.tryAcquire(client.getClientId(), client.getQpsLimit())) {
             deny = ErrorCode.RATE_LIMITED;
-        } else if (client.isRequireSignature()) {
+        } else if (!oauthChannel && client.isRequireSignature()) {
+            // OAuth2 Bearer 本身即持有者凭证，不要求额外 HMAC 签名
             deny = verifySignature(wrapped, client);
         }
 
         if (deny != null) {
+            int httpStatus = denyStatus(deny);
             writeError(response, deny);
-            recordAccessLog(client, wrapped, 401, System.currentTimeMillis() - start);
+            recordAccessLog(client, wrapped, httpStatus, System.currentTimeMillis() - start);
             return;
         }
 
-        OpenApiContext.set(client);
+        if (oauthChannel) {
+            OpenApiContext.setOauth(client, claims.sub(), claims.username(), claims.scope());
+        } else {
+            OpenApiContext.set(client);
+        }
         try {
             chain.doFilter(wrapped, response);
         } finally {
@@ -114,11 +148,45 @@ public class OpenApiAuthFilter extends OncePerRequestFilter {
         String body = OpenApiContext.cachedBody(request);
         String content = request.getMethod() + "\n" + request.getRequestURI() + "\n" + timestamp + "\n" + body;
         String expected = PushEngine.hmacSha256(crypto.decrypt(client.getClientSecret()), content);
-        return expected.equalsIgnoreCase(signature) ? null : ErrorCode.SIGNATURE_INVALID;
+        // hex 解码后常量时间比较，避免字符串短路比较泄露签名信息
+        byte[] expectedBytes = hexToBytes(expected);
+        byte[] actualBytes = hexToBytes(signature.trim());
+        return (expectedBytes != null && actualBytes != null
+                && MessageDigest.isEqual(expectedBytes, actualBytes)) ? null : ErrorCode.SIGNATURE_INVALID;
+    }
+
+    private static byte[] hexToBytes(String hex) {
+        if (hex == null || hex.length() % 2 != 0) {
+            return null;
+        }
+        try {
+            byte[] out = new byte[hex.length() / 2];
+            for (int i = 0; i < out.length; i++) {
+                int hi = Character.digit(hex.charAt(i * 2), 16);
+                int lo = Character.digit(hex.charAt(i * 2 + 1), 16);
+                if (hi < 0 || lo < 0) {
+                    return null;
+                }
+                out[i] = (byte) ((hi << 4) | lo);
+            }
+            return out;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static int denyStatus(ErrorCode ec) {
+        if (ec == ErrorCode.RATE_LIMITED) {
+            return 429;
+        }
+        if (ec == ErrorCode.FORBIDDEN) {
+            return 403;
+        }
+        return 401;
     }
 
     private void writeError(HttpServletResponse response, ErrorCode ec) throws IOException {
-        response.setStatus(ec == ErrorCode.RATE_LIMITED ? 429 : 401);
+        response.setStatus(denyStatus(ec));
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.getWriter().write(objectMapper.writeValueAsString(ApiResponse.error(ec)));

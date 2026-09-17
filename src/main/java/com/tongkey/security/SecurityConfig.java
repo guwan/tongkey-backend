@@ -38,8 +38,9 @@ public class SecurityConfig {
     @Bean
     public OpenApiAuthFilter openApiAuthFilter(ClientRepository clientRepository,
                                                ApiAccessLogRepository accessLogRepository,
-                                               RateLimiterRegistry rateLimiter, CryptoUtil crypto) {
-        return new OpenApiAuthFilter(clientRepository, accessLogRepository, rateLimiter, crypto);
+                                               RateLimiterRegistry rateLimiter, CryptoUtil crypto,
+                                               com.tongkey.oauth2.JwtTokenService jwtTokenService) {
+        return new OpenApiAuthFilter(clientRepository, accessLogRepository, rateLimiter, crypto, jwtTokenService);
     }
 
     @Bean
@@ -80,12 +81,13 @@ public class SecurityConfig {
     @Order(2)
     public SecurityFilterChain consoleChain(HttpSecurity http, ConsoleAuthFilter consoleAuthFilter) throws Exception {
         return http
-                .securityMatcher("/console/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html",
-                        "/actuator/**", "/error")
+                .securityMatcher("/console/**", "/oauth2/**", "/v3/api-docs/**", "/swagger-ui/**",
+                        "/swagger-ui.html", "/actuator/**", "/error")
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/console/auth/login").permitAll()
+                        .requestMatchers("/oauth2/**").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html",
                                 "/actuator/**", "/error").permitAll()
                         .anyRequest().permitAll())
@@ -124,11 +126,20 @@ public class SecurityConfig {
                         .version("v1.0.0")
                         .contact(new Contact().name("TongKey"))
                         .license(new License().name("Internal Use")))
-                .components(new Components().addSecuritySchemes("ApiKeyAuth",
-                        new SecurityScheme()
-                                .type(SecurityScheme.Type.APIKEY)
-                                .in(SecurityScheme.In.HEADER)
-                                .name("X-API-Key")
-                                .description("开放 API 凭证，在管理台创建接入方后获得")));
+                .components(new Components()
+                        .addSecuritySchemes("ApiKeyAuth",
+                                new SecurityScheme()
+                                        .type(SecurityScheme.Type.APIKEY)
+                                        .in(SecurityScheme.In.HEADER)
+                                        .name("X-API-Key")
+                                        .description("开放 API 凭证，在管理台创建接入方后获得"))
+                        .addSecuritySchemes("BearerAuth",
+                                new SecurityScheme()
+                                        .type(SecurityScheme.Type.HTTP)
+                                        .scheme("bearer")
+                                        .bearerFormat("JWT")
+                                        .description("OAuth2 授权码流程获得的 access_token（HS256 JWT），"
+                                                + "以 Authorization: Bearer <token> 使用，与 X-API-Key 双通道等效，"
+                                                + "实际 scope 以令牌授权范围为准")));
     }
 }

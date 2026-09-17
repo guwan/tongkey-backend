@@ -48,15 +48,17 @@ public class ConsoleClientController {
     }
 
     public record ClientRequest(@NotBlank String clientId, @NotBlank String name, String scopes,
-                                Integer qpsLimit, Boolean requireSignature, Boolean enabled) {
+                                String redirectUris, Integer qpsLimit, Boolean requireSignature,
+                                Boolean enabled) {
     }
 
     public record ClientView(String id, String clientId, String name, String apiKey, String scopes,
-                             int qpsLimit, boolean requireSignature, boolean enabled,
+                             String redirectUris, int qpsLimit, boolean requireSignature, boolean enabled,
                              java.time.Instant createdAt) {
         static ClientView of(ClientEntity c) {
             return new ClientView(c.getId(), c.getClientId(), c.getName(), c.getApiKey(), c.getScopes(),
-                    c.getQpsLimit(), c.isRequireSignature(), c.isEnabled(), c.getCreatedAt());
+                    c.getRedirectUris(), c.getQpsLimit(), c.isRequireSignature(), c.isEnabled(),
+                    c.getCreatedAt());
         }
     }
 
@@ -143,6 +145,8 @@ public class ConsoleClientController {
         if (r.scopes() != null && !r.scopes().isBlank()) {
             c.setScopes(r.scopes());
         }
+        // 回调白名单归一化为一行一个 URI；空值表示清空
+        c.setRedirectUris(normalizeRedirectUris(r.redirectUris()));
         if (r.qpsLimit() != null && r.qpsLimit() > 0) {
             c.setQpsLimit(r.qpsLimit());
         }
@@ -150,6 +154,24 @@ public class ConsoleClientController {
             c.setRequireSignature(r.requireSignature());
         }
         c.setEnabled(r.enabled() == null || r.enabled());
+    }
+
+    /** 支持换行/逗号/空白分隔，归一化为换行分隔；同时做基本 http(s) 协议校验。 */
+    private String normalizeRedirectUris(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        List<String> uris = java.util.Arrays.stream(raw.split("[\\s,]+"))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+        for (String uri : uris) {
+            if (!(uri.startsWith("http://") || uri.startsWith("https://"))) {
+                throw new ApiException(ErrorCode.INVALID_PARAM,
+                        "回调地址必须以 http:// 或 https:// 开头: " + uri);
+            }
+        }
+        return String.join("\n", uris);
     }
 
     private String randomToken(int bytes) {

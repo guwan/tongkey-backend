@@ -25,6 +25,8 @@ tongkey:
     username: ${TONGKEY_ADMIN_USER:admin}
     password: ${TONGKEY_ADMIN_PASSWORD}  # 必填：生产密码必须覆盖默认值
     token-ttl-minutes: 240
+  oauth2:
+    jwt-secret: ${TONGKEY_OAUTH_JWT_SECRET}  # 必填：OAuth2 JWT HS256 签名密钥（至少 32 字符随机串）
 
 # 生产安全日志级别
 logging:
